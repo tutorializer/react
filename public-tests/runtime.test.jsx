@@ -5,10 +5,17 @@ import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import Chapter from '../Chapter.jsx'
+import { resolveMessageOrigin } from '../messageOrigin.js'
 import Tutorial from '../Tutorial.jsx'
 import Tutorializer from '../Tutorializer.jsx'
 
 describe('@tutorializer/react public package', () => {
+  it('resolves same-origin relative product URLs', () => {
+    expect(resolveMessageOrigin('/', 'https://product.example/tutorials')).toBe(
+      'https://product.example',
+    )
+  })
+
   it('renders a tutorial chapter from standalone imports', async () => {
     render(
       <Tutorializer>

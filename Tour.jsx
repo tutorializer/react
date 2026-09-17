@@ -1,6 +1,7 @@
 /* Copyright 2026 Tutorializer LLC */
 import { useEffect, useLayoutEffect, useRef } from 'react'
 
+import { resolveMessageOrigin } from './messageOrigin.js'
 import { TIMING } from './timing.js'
 import useTutorial from './useTutorial.js'
 
@@ -49,7 +50,11 @@ const Tour = ({
           // Record tour start timing to context for Playwright access
           contextRef.current?.recordTourStart(activeChapterName)
           const url = preloadedApp.getUrl()
-          const origin = new URL(url).origin
+          const origin = resolveMessageOrigin(url)
+          if (!origin) {
+            console.error(`Cannot start tour: invalid app URL "${url}"`)
+            return
+          }
           iframe?.contentWindow?.postMessage(
             {
               type: 'startTour',
@@ -83,12 +88,7 @@ const Tour = ({
   useEffect(() => {
     const handleMessage = event => {
       const preloadedApp = preloadedAppRef?.current
-      let expectedOrigin = null
-      try {
-        expectedOrigin = new URL(preloadedApp?.getUrl?.()).origin
-      } catch {
-        // An invalid app URL cannot be a trusted message source.
-      }
+      const expectedOrigin = resolveMessageOrigin(preloadedApp?.getUrl?.())
 
       if (!expectedOrigin || event.origin !== expectedOrigin) {
         return

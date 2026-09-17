@@ -2,6 +2,7 @@
 /** @jsxImportSource @emotion/react */
 import { useContext, useEffect, useLayoutEffect, useRef } from 'react'
 
+import { resolveMessageOrigin } from './messageOrigin.js'
 import SpeechContext from './SpeechContext.js'
 import { TIMING } from './timing.js'
 import useTutorial from './useTutorial.js'
@@ -229,13 +230,7 @@ const TourWithSpeech = ({
           return
         }
 
-        let origin = '*'
-        try {
-          origin = new URL(preloadedApp.getUrl()).origin
-        } catch {
-          // Fall back to '*': the evidence is worth more than origin pinning on
-          // a localhost recording rig.
-        }
+        const origin = resolveMessageOrigin(preloadedApp.getUrl()) || '*'
 
         const requestId = `${requestType}-${Date.now()}-${Math.random().toString(36).slice(2)}`
         let settled = false
@@ -1397,7 +1392,14 @@ const TourWithSpeech = ({
             contextRef.current?.recordTourStart(activeChapterName)
 
             const url = preloadedApp.getUrl()
-            const origin = new URL(url).origin
+            const origin = resolveMessageOrigin(url)
+            if (!origin) {
+              const detail = `Tour "${name}" cannot start: invalid app URL "${url}"`
+              console.error(`[TourWithSpeech] ${detail}`)
+              window.tutorializer = window.tutorializer || {}
+              window.tutorializer.tourError = { tour: name, detail }
+              return
+            }
 
             runStepByStep(iframe, origin)
           },
