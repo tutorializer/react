@@ -1384,8 +1384,11 @@ const TourWithSpeech = ({
 
       const iframe = preloadedApp.getIframe()
       const isLoggedIn = preloadedApp.getIsLoggedIn()
+      const isLoaded = preloadedApp.getIsLoaded?.() ?? isLoggedIn
+      const requiresLogin = preloadedApp.getRequiresLogin?.() ?? true
+      const isReady = requiresLogin ? isLoggedIn : isLoaded
 
-      if (isLoggedIn && !tourStartedRef.current && iframe) {
+      if (isReady && !tourStartedRef.current && iframe) {
         tourStartedRef.current = true
 
         const timer = setTimeout(

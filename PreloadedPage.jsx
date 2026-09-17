@@ -64,10 +64,11 @@ const PreloadedPage = forwardRef(
         getIframe: () => iframeRef.current,
         getIsLoggedIn: () => isLoggedIn,
         getIsLoaded: () => isLoaded,
+        getRequiresLogin: () => requiresLogin,
         getUrl: () => loginUrl,
         getZoom: () => zoom,
       }),
-      [isLoggedIn, isLoaded, loginUrl, zoom],
+      [isLoggedIn, isLoaded, loginUrl, requiresLogin, zoom],
     )
 
     // Handle iframe load event

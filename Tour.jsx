@@ -36,8 +36,11 @@ const Tour = ({
 
       const iframe = preloadedApp.getIframe()
       const isLoggedIn = preloadedApp.getIsLoggedIn()
+      const isLoaded = preloadedApp.getIsLoaded?.() ?? isLoggedIn
+      const requiresLogin = preloadedApp.getRequiresLogin?.() ?? true
+      const isReady = requiresLogin ? isLoggedIn : isLoaded
 
-      if (isLoggedIn && !tourStartedRef.current && iframe) {
+      if (isReady && !tourStartedRef.current && iframe) {
         tourStartedRef.current = true
         // Delay to ensure the iframe is visible and app is ready
         // This allows the fade-in animation to complete before tour starts
