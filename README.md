@@ -12,7 +12,7 @@ the components they use.
 Pin a commit so a tutorial stays reproducible:
 
 ```bash
-npm install github:tutorializer/react#COMMIT_SHA @emotion/react
+npm install https://github.com/tutorializer/react/archive/COMMIT_SHA.tar.gz @emotion/react
 ```
 
 ## Minimal tutorial
