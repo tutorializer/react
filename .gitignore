@@ -1,0 +1,4 @@
+reports/
+.stryker-tmp/
+node_modules/
+coverage/
