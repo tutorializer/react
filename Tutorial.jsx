@@ -5,6 +5,7 @@ import {
   cloneElement,
   createRef,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -28,6 +29,7 @@ const TutorialContent = ({
   const {
     currentIndex,
     isPlaying,
+    isPaused,
     hasStarted,
     hasEnded,
     start,
@@ -177,6 +179,30 @@ const TutorialContent = ({
     }
   }
 
+  // A chapter that finishes while the viewer has paused the player advances
+  // when they play again, not under the pause
+  const isPausedRef = useRef(isPaused)
+  const pendingAdvanceRef = useRef(false)
+  const goToNextChapterRef = useRef(goToNextChapter)
+  useLayoutEffect(() => {
+    isPausedRef.current = isPaused
+    goToNextChapterRef.current = goToNextChapter
+  })
+
+  const completeChapter = () => {
+    if (isPausedRef.current) {
+      pendingAdvanceRef.current = true
+      return
+    }
+    goToNextChapterRef.current()
+  }
+
+  useEffect(() => {
+    if (isPaused || !pendingAdvanceRef.current) return
+    pendingAdvanceRef.current = false
+    goToNextChapterRef.current()
+  }, [isPaused])
+
   // Build chapter index map for Chapter to derive chapterIndex from context
   const chapterIndexMap = useMemo(() => {
     const map = {}
@@ -192,25 +218,39 @@ const TutorialContent = ({
   const activeChapterValue = useMemo(
     () => ({
       activeChapterName: currentChapterName,
-      onChapterComplete: goToNextChapter,
+      onChapterComplete: completeChapter,
       language,
       chapterIndexMap,
     }),
     [currentChapterName, language, chapterIndexMap],
   )
 
+  // Going to a chapter plays it, so the Play/Pause button says what the
+  // player is doing, and it drops an advance a pause was holding back
+  const playFromNavigation = () => {
+    pendingAdvanceRef.current = false
+    start()
+  }
+
   const goToPrevious = () => {
     setLocalHasStarted(true)
     setLocalHasEnded(false)
     if (localCurrentIndex > 0) {
+      playFromNavigation()
       setLocalCurrentIndex(prev => prev - 1)
     }
   }
 
   const goToChapter = index => {
+    playFromNavigation()
     setLocalHasStarted(true)
     setLocalHasEnded(false)
     setLocalCurrentIndex(index)
+  }
+
+  const goToNextChapterFromControls = () => {
+    playFromNavigation()
+    goToNextChapter()
   }
 
   // Memoized context values for ChapterIndexContext to avoid creating new objects every render
@@ -268,12 +308,19 @@ const TutorialContent = ({
       <ActiveChapterContext.Provider value={activeChapterValue}>
         <div
           data-tutorial-ready="true"
+          data-tutorial-paused={showControls && isPaused ? 'true' : undefined}
           css={{
             position: 'relative',
             width: '100%',
             height: '100%',
             overflow: 'hidden',
-            background: 'var(--color-primary, #2c3e50)',
+            // Seen between chapters and through a fading slide, so it is the
+            // slides' own surface (CLAUDE.md, "Slide surface")
+            background:
+              'var(--slide-background, var(--color-primary, #5530a6))',
+            // A paused player freezes the slides' animations where they are
+            '&[data-tutorial-paused] *, &[data-tutorial-paused] *::before, &[data-tutorial-paused] *::after':
+              { animationPlayState: 'paused !important' },
           }}
         >
           {!localHasStarted && showControls && (
@@ -288,7 +335,8 @@ const TutorialContent = ({
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: 'var(--color-primary, #2c3e50)',
+                background:
+                  'var(--slide-background, var(--color-primary, #5530a6))',
                 zIndex: 10001,
               }}
             >
@@ -318,7 +366,7 @@ const TutorialContent = ({
                   width="32"
                   height="32"
                   viewBox="0 0 24 24"
-                  fill="var(--color-primary, #2c3e50)"
+                  fill="var(--color-primary, #5530a6)"
                 >
                   <path d="M8 5v14l11-7z" />
                 </svg>
@@ -415,7 +463,7 @@ const TutorialContent = ({
               isPlaying={isPlaying}
               togglePlayPause={togglePlayPause}
               goToPrevious={goToPrevious}
-              goToNextChapter={goToNextChapter}
+              goToNextChapter={goToNextChapterFromControls}
               goToChapter={goToChapter}
               setLocalHasStarted={setLocalHasStarted}
               setLocalHasEnded={setLocalHasEnded}

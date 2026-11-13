@@ -9,11 +9,12 @@ const Headline = ({ children }) => {
     zIndex: 9999,
     width: '100%',
     height: '100%',
-    background: 'var(--color-primary)',
+    // The same surface as a Slide's; see CLAUDE.md, "Slide surface"
+    background: 'var(--slide-background, var(--color-primary))',
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
-    color: 'var(--color-primary-lightest)',
+    color: 'var(--slide-color, var(--color-primary-lightest))',
     fontFamily:
       "Figtree, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'",
     fontSize: 'clamp(40px, 5vw, 80px)',

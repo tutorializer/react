@@ -55,6 +55,21 @@ The iframe application must initialize `@tutorializer/tours` with a matching
 `create-task` entry in its `tours.json`. Pass generated speech data to
 `Tutorializer` and omit `speeches={false}` when narration is available.
 
+## Slide colors
+
+`Slide`, `Headline` and the space between chapters use `--color-primary` as
+their background and `--color-primary-lightest` for text. Set two CSS custom
+properties to give them your own; the background takes any `background`
+value, gradients included:
+
+```css
+:root {
+  --slide-background:
+    radial-gradient(ellipse at 75% 15%, #2dd4bf80, transparent 65%), #386fa4;
+  --slide-color: white;
+}
+```
+
 ## License
 
 MIT

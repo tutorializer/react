@@ -1,6 +1,6 @@
 /* Copyright 2026 Tutorializer LLC */
 /** @jsxImportSource @emotion/react */
-import { useContext, useEffect, useRef } from 'react'
+import { useContext, useEffect, useLayoutEffect, useRef } from 'react'
 
 import SpeechContext from './SpeechContext.js'
 import { TIMING } from './timing.js'
@@ -70,39 +70,90 @@ const Speech = ({
   // Use timing from context if available, otherwise use default
   const effectiveDelay = delay ?? context?.timing?.FADE_IN ?? TIMING.FADE_IN
 
+  // The viewer's pause (Controls) holds the line: one that has not begun
+  // waits for them to play again, and one that is playing stops where it is
+  // and carries on from there. A recording is never paused.
+  const isPaused = context?.isPaused ?? false
+  const isPausedRef = useRef(isPaused)
+  // 'idle', 'waiting' (to begin once the pause ends), 'playing', 'paused',
+  // 'ended'
+  const playbackRef = useRef('idle')
+  const recordedRef = useRef(false)
+  const beginRef = useRef(null)
+
+  useLayoutEffect(() => {
+    isPausedRef.current = isPaused
+  }, [isPaused])
+
+  // Its start is recorded once, when it is first heard, however many times a
+  // pause interrupts it
+  const playLine = () => {
+    audioRef.current
+      ?.play()
+      .then(() => {
+        if (recordedRef.current) return
+        recordedRef.current = true
+        // performance.now(), not Date.now(): subtitle offsets are computed
+        // by subtracting recordingStartTime, which is captured with
+        // performance.now() in this same page. Mixing clocks produced cues
+        // timestamped at absolute wall-clock time.
+        context?.recordSpeechTiming(childrenText, performance.now())
+      })
+      .catch(error => {
+        // A pause that lands before playback began interrupts play()
+        if (playbackRef.current === 'paused') return
+        console.warn('Audio playback failed:', error)
+      })
+  }
+
   useEffect(() => {
     if (audioRef.current && audioSrc && autoplay) {
       audioRef.current.volume = volume
 
-      const play = () => {
+      const begin = () => {
+        if (isPausedRef.current) {
+          playbackRef.current = 'waiting'
+          return
+        }
+        playbackRef.current = 'playing'
+        recordedRef.current = false
         console.log(`[TIMING] Audio play started at ${Date.now()}`)
-        audioRef.current
-          ?.play()
-          .then(() => {
-            // performance.now(), not Date.now(): subtitle offsets are computed
-            // by subtracting recordingStartTime, which is captured with
-            // performance.now() in this same page. Mixing clocks produced cues
-            // timestamped at absolute wall-clock time.
-            context?.recordSpeechTiming(childrenText, performance.now())
-          })
-          .catch(error => {
-            console.warn('Audio playback failed:', error)
-          })
+        playLine()
       }
+      beginRef.current = begin
 
       if (effectiveDelay > 0) {
-        const timer = setTimeout(play, effectiveDelay)
+        const timer = setTimeout(begin, effectiveDelay)
         return () => clearTimeout(timer)
       }
-      play()
+      begin()
     }
 
     return undefined
   }, [audioSrc, autoplay, volume, effectiveDelay])
 
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    if (isPaused) {
+      if (playbackRef.current === 'playing') {
+        playbackRef.current = 'paused'
+        audio.pause()
+      }
+      return
+    }
+    if (playbackRef.current === 'waiting') {
+      beginRef.current?.()
+    } else if (playbackRef.current === 'paused') {
+      playbackRef.current = 'playing'
+      playLine()
+    }
+  }, [isPaused])
+
   if (!audioSrc) return null
 
   const handleEnded = () => {
+    playbackRef.current = 'ended'
     console.log(`[TIMING] Audio ended at ${Date.now()}`)
     // Signal to context that audio completed
     if (context) {

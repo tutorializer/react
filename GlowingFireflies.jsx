@@ -5,23 +5,25 @@ import { useFrame } from '@react-three/fiber'
 import { useRef, useState, useMemo } from 'react'
 import * as THREE from 'three'
 
+import { secureRandom } from './secureRandom.js'
+
 function generateParticles(count, speed, spread) {
   const data = []
   for (let i = 0; i < count; i += 1) {
     data.push({
-      x: (Math.random() - 0.5) * spread * 2,
-      y: (Math.random() - 0.5) * spread * 2,
-      z: (Math.random() - 0.5) * spread * 0.4,
-      scale: Math.random() * 0.1 + 0.04,
+      x: (secureRandom() - 0.5) * spread * 2,
+      y: (secureRandom() - 0.5) * spread * 2,
+      z: (secureRandom() - 0.5) * spread * 0.4,
+      scale: secureRandom() * 0.1 + 0.04,
       // Gentle organic drift speeds
-      speedX: (Math.random() - 0.5) * speed * 2,
-      speedY: (Math.random() - 0.5) * speed * 2,
+      speedX: (secureRandom() - 0.5) * speed * 2,
+      speedY: (secureRandom() - 0.5) * speed * 2,
       // Each firefly has its own glow rhythm
-      glowSpeed: Math.random() * 1.5 + 0.5,
-      glowPhase: Math.random() * Math.PI * 2,
+      glowSpeed: secureRandom() * 1.5 + 0.5,
+      glowPhase: secureRandom() * Math.PI * 2,
       // Organic looping path offset
-      pathPhase: Math.random() * Math.PI * 2,
-      pathRadius: Math.random() * 1.5 + 0.5,
+      pathPhase: secureRandom() * Math.PI * 2,
+      pathRadius: secureRandom() * 1.5 + 0.5,
     })
   }
   return data

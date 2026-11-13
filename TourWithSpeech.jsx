@@ -1,8 +1,10 @@
 /* Copyright 2026 Tutorializer LLC */
 /** @jsxImportSource @emotion/react */
+
 import { useContext, useEffect, useLayoutEffect, useRef } from 'react'
 
 import { resolveMessageOrigin } from './messageOrigin.js'
+import { secureRandom } from './secureRandom.js'
 import SpeechContext from './SpeechContext.js'
 import { TIMING } from './timing.js'
 import useTutorial from './useTutorial.js'
@@ -193,6 +195,16 @@ const TourWithSpeech = ({
   const speechesPropRef = useRef(speechesProp)
   const speedRef = useRef(speed)
   const entranceRef = useRef(entrance)
+  // The viewer's pause (Controls) stops the step's narration where it is,
+  // and the next step waits for them to play again. A recording is never
+  // paused.
+  const isPaused = context?.isPaused ?? false
+  const isPausedRef = useRef(isPaused)
+  // The narration of the step on screen: { pause, resume }
+  const narrationRef = useRef(null)
+  // Set once the chapter is left: a tour still running sends no more steps
+  // to the app frame, which the next chapter may be using
+  const unmountedRef = useRef(false)
   useLayoutEffect(() => {
     contextRef.current = context
     speechesRef.current = speeches
@@ -201,7 +213,15 @@ const TourWithSpeech = ({
     speechesPropRef.current = speechesProp
     speedRef.current = speed
     entranceRef.current = entrance
+    isPausedRef.current = isPaused
   })
+
+  useEffect(() => {
+    const narration = narrationRef.current
+    if (!narration) return
+    if (isPaused) narration.pause()
+    else narration.resume()
+  }, [isPaused])
 
   // Bridge so Node can ask the APP — not this shell — about itself when a step
   // fails. The two live on different ports, so the recorder can neither read the
@@ -232,7 +252,7 @@ const TourWithSpeech = ({
 
         const origin = resolveMessageOrigin(preloadedApp.getUrl()) || '*'
 
-        const requestId = `${requestType}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+        const requestId = `${requestType}-${Date.now()}-${secureRandom().toString(36).slice(2)}`
         let settled = false
         let timer = null
 
@@ -513,6 +533,56 @@ const TourWithSpeech = ({
       activeGroupScale: null, // zoom scale shared across group steps
     }
 
+    // Plays a step's narration on `audio`, as the step on screen, so the
+    // viewer's pause can stop it where it is and play it on from there.
+    // `onHeard` runs once, when the line is first heard; `onPlaying` every
+    // time it plays, after a pause too; `onPause` when a pause stops it. A
+    // pause that lands before playback began interrupts play(), which is no
+    // failure. Returns a release for when the line is over.
+    const playNarration = (
+      audio,
+      { onHeard, onPlaying, onPause, onFailed },
+    ) => {
+      const narration = { paused: false, heard: false }
+      const play = () => {
+        audio
+          .play()
+          .then(() => {
+            if (narration.paused) return
+            if (!narration.heard) {
+              narration.heard = true
+              onHeard?.()
+            }
+            onPlaying?.()
+          })
+          .catch(error => {
+            if (narration.paused) return
+            console.warn('Audio playback failed:', error)
+            onFailed?.()
+          })
+      }
+      const controls = {
+        pause: () => {
+          if (narration.paused) return
+          narration.paused = true
+          onPause?.()
+          audio.pause()
+        },
+        resume: () => {
+          if (!narration.paused) return
+          narration.paused = false
+          play()
+        },
+      }
+      narrationRef.current = controls
+      // Paused between the step's start and its line: the resume plays it
+      if (isPausedRef.current) narration.paused = true
+      else play()
+      return () => {
+        if (narrationRef.current === controls) narrationRef.current = null
+      }
+    }
+
     const executeStepWithSpeech = (iframe, origin, step, allSteps) =>
       new Promise(resolve => {
         // Overview steps show karaoke overlay with speech, no iframe interaction
@@ -533,46 +603,42 @@ const TourWithSpeech = ({
 
             if (alignment) {
               // Play audio and show karaoke overlay simultaneously
-              audio
-                .play()
-                .then(() => {
-                  // performance.now(), not Date.now(): these timings are turned
-                  // into subtitle offsets by subtracting recordingStartTime,
-                  // which generateTutorial.js captures with performance.now()
-                  // in this same page. Mixing the two clocks left the epoch
-                  // almost intact and produced cues 56 years into the video.
+              const release = playNarration(audio, {
+                // performance.now(), not Date.now(): these timings are turned
+                // into subtitle offsets by subtracting recordingStartTime,
+                // which generateTutorial.js captures with performance.now()
+                // in this same page. Mixing the two clocks left the epoch
+                // almost intact and produced cues 56 years into the video.
+                onHeard: () =>
                   contextRef.current?.recordSpeechTiming(
                     description,
                     performance.now(),
-                  )
-                })
-                .catch(error => {
-                  console.warn('Audio playback failed:', error)
-                })
+                  ),
+              })
               showOverlayWithKaraoke(audio, alignment, effectiveSpeed).then(
-                resolve,
+                () => {
+                  release()
+                  resolve()
+                },
               )
             } else {
               // No alignment: play audio with static text overlay
               const audioPromise = new Promise(audioResolve => {
+                let release = () => {}
                 const onEnded = () => {
                   audio.removeEventListener('ended', onEnded)
+                  release()
                   audioResolve()
                 }
                 audio.addEventListener('ended', onEnded)
-                audio
-                  .play()
-                  .then(() => {
+                release = playNarration(audio, {
+                  onHeard: () =>
                     contextRef.current?.recordSpeechTiming(
                       description,
                       Date.now(),
-                    )
-                  })
-                  .catch(error => {
-                    console.warn('Audio playback failed:', error)
-                    audio.removeEventListener('ended', onEnded)
-                    audioResolve()
-                  })
+                    ),
+                  onFailed: onEnded,
+                })
               })
               Promise.all([
                 audioPromise,
@@ -1235,38 +1301,44 @@ const TourWithSpeech = ({
             // Safety net: if the 'ended' event never fires (e.g. playback
             // stalls in the recording environment), force completion so the
             // step — and the whole tour — can't hang to the recorder timeout.
+            // It times what is left of the line while it plays, so the
+            // viewer's pause cannot set it off.
             let endedFallback = null
-            const onEnded = () => {
+            const clearFallback = () => {
               if (endedFallback) clearTimeout(endedFallback)
+              endedFallback = null
+            }
+            let release = () => {}
+            const onEnded = () => {
+              clearFallback()
               audio.removeEventListener('ended', onEnded)
+              release()
               audioDone = true
               checkBothDone()
             }
             audio.addEventListener('ended', onEnded)
             audio.src = audioSrc
-            audio
-              .play()
-              .then(() => {
-                // Same clock as recordingStartTime — see the note above.
+            release = playNarration(audio, {
+              // Same clock as recordingStartTime — see the note above.
+              onHeard: () =>
                 contextRef.current?.recordSpeechTiming(
                   description,
                   performance.now(),
-                )
-                const durationMs = Number.isFinite(audio.duration)
-                  ? audio.duration * 1000
+                ),
+              onPlaying: () => {
+                clearFallback()
+                const remainingMs = Number.isFinite(audio.duration)
+                  ? (audio.duration - (audio.currentTime || 0)) * 1000
                   : 0
                 const speedFactor = speedRef.current || 1
                 endedFallback = setTimeout(
                   onEnded,
-                  durationMs / speedFactor + 5000,
+                  remainingMs / speedFactor + 5000,
                 )
-              })
-              .catch(error => {
-                console.warn('Audio playback failed:', error)
-                audio.removeEventListener('ended', onEnded)
-                audioDone = true
-                checkBothDone()
-              })
+              },
+              onPause: clearFallback,
+              onFailed: onEnded,
+            })
           } else {
             // No audio for this step, mark as done immediately
             audioDone = true
@@ -1278,6 +1350,8 @@ const TourWithSpeech = ({
       })
 
     const finishTour = () => {
+      // Its chapter was left: completing it would advance the one on screen
+      if (unmountedRef.current) return
       contextRef.current?.recordTourEnd(activeChapterName)
       if (contextRef.current) {
         contextRef.current.signalEventComplete('tourCompleted')
@@ -1312,9 +1386,10 @@ const TourWithSpeech = ({
       )
 
       if (!response) {
-        console.error(
-          `[TourWithSpeech] Tour "${name}" failed: iframe did not respond to initStepByStep after retries`,
-        )
+        const detail = `Tour "${name}" failed: iframe did not respond to initStepByStep after retries`
+        console.error(`[TourWithSpeech] ${detail}`)
+        window.tutorializer = window.tutorializer || {}
+        window.tutorializer.tourError = { tour: name, detail }
         finishTour()
         return
       }
@@ -1334,18 +1409,28 @@ const TourWithSpeech = ({
       })
 
       if (steps.length === 0) {
-        console.error(`Tour "${name}" has no steps`)
+        const detail = `Tour "${name}" has no steps`
+        console.error(detail)
+        window.tutorializer = window.tutorializer || {}
+        window.tutorializer.tourError = { tour: name, detail }
         iframe.style.willChange = ''
         iframe.style.transition = ''
         finishTour()
         return
       }
 
-      // Execute each step sequentially
+      // Execute each step sequentially. The viewer's pause holds the next
+      // step, and a chapter left mid-tour sends no more.
       await steps.reduce(async (previousPromise, step) => {
         await previousPromise
+        await contextRef.current?.waitWhilePaused?.()
+        if (unmountedRef.current) return
         await executeStepWithSpeech(iframe, origin, step, steps)
       }, Promise.resolve())
+
+      // Left mid-tour: the app frame is the next chapter's now, so it is
+      // neither zoomed out nor cleaned up from here
+      if (unmountedRef.current) return
 
       // Final zoom-out if still zoomed after last step
       if (zoomState.isZoomed) {
@@ -1427,12 +1512,13 @@ const TourWithSpeech = ({
   }, [preloadedAppRef, name, language, metadata, skipSteps, activeChapterName])
 
   // Reset tour state when component unmounts
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    unmountedRef.current = false
+    return () => {
+      unmountedRef.current = true
       tourStartedRef.current = false
-    },
-    [],
-  )
+    }
+  }, [])
 
   return (
     // biome-ignore lint/a11y/useMediaCaption: audio element for tour speech narration

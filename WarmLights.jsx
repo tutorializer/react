@@ -5,6 +5,8 @@ import { useFrame } from '@react-three/fiber'
 import { useRef, useState, useMemo } from 'react'
 import * as THREE from 'three'
 
+import { secureRandom } from './secureRandom.js'
+
 // Generates a soft radial-gradient texture: bright in the center, fading to
 // fully transparent at the edges. Combined with AdditiveBlending below this
 // produces the "glow" of each light — no post-processing pass needed.
@@ -37,15 +39,15 @@ function generateLights(count, speed, spread) {
   const data = []
   for (let i = 0; i < count; i += 1) {
     data.push({
-      x: (Math.random() - 0.5) * spread * 2,
-      y: (Math.random() - 0.5) * spread * 2,
-      z: (Math.random() - 0.5) * spread * 0.6,
-      scale: Math.random() * 0.8 + 0.4,
-      driftSpeed: speed * (0.3 + Math.random() * 0.5),
-      wobbleSpeed: speed * (0.8 + Math.random() * 0.6),
-      wobbleAmount: 0.3 + Math.random() * 0.5,
-      twinklePhase: Math.random() * Math.PI * 2,
-      twinkleSpeed: 0.4 + Math.random() * 0.6,
+      x: (secureRandom() - 0.5) * spread * 2,
+      y: (secureRandom() - 0.5) * spread * 2,
+      z: (secureRandom() - 0.5) * spread * 0.6,
+      scale: secureRandom() * 0.8 + 0.4,
+      driftSpeed: speed * (0.3 + secureRandom() * 0.5),
+      wobbleSpeed: speed * (0.8 + secureRandom() * 0.6),
+      wobbleAmount: 0.3 + secureRandom() * 0.5,
+      twinklePhase: secureRandom() * Math.PI * 2,
+      twinkleSpeed: 0.4 + secureRandom() * 0.6,
     })
   }
   return data

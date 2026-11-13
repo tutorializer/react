@@ -5,17 +5,19 @@ import { useFrame } from '@react-three/fiber'
 import { useRef, useState, useMemo } from 'react'
 import * as THREE from 'three'
 
+import { secureRandom } from './secureRandom.js'
+
 function generateParticles(count, speed, spread) {
   const data = []
   for (let i = 0; i < count; i += 1) {
     data.push({
-      x: (Math.random() - 0.5) * spread * 2,
-      y: (Math.random() - 0.5) * spread * 2,
-      z: (Math.random() - 0.5) * spread * 0.5,
-      scale: Math.random() * 0.15 + 0.05,
-      speedX: (Math.random() - 0.5) * speed * 4,
-      speedY: (Math.random() - 0.5) * speed * 4,
-      phase: Math.random() * Math.PI * 2,
+      x: (secureRandom() - 0.5) * spread * 2,
+      y: (secureRandom() - 0.5) * spread * 2,
+      z: (secureRandom() - 0.5) * spread * 0.5,
+      scale: secureRandom() * 0.15 + 0.05,
+      speedX: (secureRandom() - 0.5) * speed * 4,
+      speedY: (secureRandom() - 0.5) * speed * 4,
+      phase: secureRandom() * Math.PI * 2,
     })
   }
   return data

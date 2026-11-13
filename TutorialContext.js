@@ -7,6 +7,7 @@ export const ACTIONS = {
   REGISTER_PRELOADED_PAGE: 'REGISTER_PRELOADED_PAGE',
   SET_CURRENT_INDEX: 'SET_CURRENT_INDEX',
   SET_PLAYING: 'SET_PLAYING',
+  SET_PAUSED: 'SET_PAUSED',
   SET_STARTED: 'SET_STARTED',
   SET_ENDED: 'SET_ENDED',
   SIGNAL_COMPLETION: 'SIGNAL_COMPLETION',
@@ -21,6 +22,10 @@ export const initialState = {
   chapters: [], // Array of { name }
   currentIndex: 0,
   isPlaying: false,
+  // The viewer paused the player (Controls). Unlike isPlaying, which is also
+  // false before the start and after the end, it holds the narration, the
+  // tours and the reveals where they are until the viewer plays again.
+  isPaused: false,
   hasStarted: false,
   hasEnded: false,
   completedEvents: new Set(), // Track completed events for current chapter
@@ -63,6 +68,8 @@ export const tutorialReducer = (state, action) => {
       }
     case ACTIONS.SET_PLAYING:
       return { ...state, isPlaying: action.payload }
+    case ACTIONS.SET_PAUSED:
+      return { ...state, isPaused: action.payload }
     case ACTIONS.SET_STARTED:
       return { ...state, hasStarted: action.payload }
     case ACTIONS.SET_ENDED:

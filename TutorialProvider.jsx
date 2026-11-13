@@ -1,5 +1,12 @@
 /* Copyright 2026 Tutorializer LLC */
-import { useCallback, useEffect, useMemo, useReducer } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+} from 'react'
 
 import { TIMING } from './timing.js'
 import TutorialContext, {
@@ -72,13 +79,17 @@ const TutorialProvider = ({
     dispatch({ type: ACTIONS.SET_CURRENT_INDEX, payload: index })
   }, [])
 
-  // Start/pause controls
+  // Start/pause controls. Starting, from the Start button or by going to a
+  // chapter, also ends a pause.
   const start = useCallback(() => {
     dispatch({ type: ACTIONS.SET_STARTED, payload: true })
     dispatch({ type: ACTIONS.SET_ENDED, payload: false })
     dispatch({ type: ACTIONS.SET_PLAYING, payload: true })
+    dispatch({ type: ACTIONS.SET_PAUSED, payload: false })
   }, [])
 
+  // Stops the player at the end of the tutorial. It is not a pause: nothing
+  // is left waiting to resume.
   const pause = useCallback(() => {
     dispatch({ type: ACTIONS.SET_PLAYING, payload: false })
   }, [])
@@ -92,7 +103,53 @@ const TutorialProvider = ({
       dispatch({ type: ACTIONS.SET_CURRENT_INDEX, payload: 0 })
     }
     dispatch({ type: ACTIONS.SET_PLAYING, payload: !isPlaying })
+    // Pausing holds the narration, the tours and the reveals where they are
+    dispatch({ type: ACTIONS.SET_PAUSED, payload: isPlaying })
   }, [state])
+
+  // The viewer's pauses, as performance.now() intervals, so a reveal timed
+  // from when its line started can add the time spent paused since then; and
+  // whoever waits for the viewer to play again.
+  const pausesRef = useRef([])
+  const pausedRef = useRef(false)
+  const resumeWaitersRef = useRef([])
+
+  useLayoutEffect(() => {
+    pausedRef.current = state.isPaused
+    const pauses = pausesRef.current
+    const last = pauses[pauses.length - 1]
+    if (state.isPaused) {
+      if (!last || last.to !== undefined) {
+        pauses.push({ from: performance.now() })
+      }
+      return
+    }
+    if (last && last.to === undefined) last.to = performance.now()
+    const waiters = resumeWaitersRef.current
+    resumeWaitersRef.current = []
+    waiters.forEach(resolve => resolve())
+  }, [state.isPaused])
+
+  // Resolves at once unless paused, else when the viewer plays again
+  const waitWhilePaused = useCallback(
+    () =>
+      pausedRef.current
+        ? new Promise(resolve => {
+            resumeWaitersRef.current.push(resolve)
+          })
+        : Promise.resolve(),
+    [],
+  )
+
+  // How many milliseconds the player spent paused after `since`
+  const getPausedSince = useCallback(since => {
+    const now = performance.now()
+    return pausesRef.current.reduce(
+      (total, { from, to = now }) =>
+        total + Math.max(0, to - Math.max(from, since)),
+      0,
+    )
+  }, [])
 
   // Signal completion events
   const signalAudioComplete = useCallback(() => {
@@ -164,10 +221,13 @@ const TutorialProvider = ({
       currentIndex: state.currentIndex,
       currentChapterName,
       isPlaying: state.isPlaying,
+      isPaused: state.isPaused,
       hasStarted: state.hasStarted,
       hasEnded: state.hasEnded,
       completedEvents: state.completedEvents,
       preloadedPages: state.preloadedPages,
+      // When each speech started playing, for <Reveal> cues
+      speechTimings: state.speechTimings,
 
       // Timing constants
       timing: TIMING,
@@ -185,6 +245,8 @@ const TutorialProvider = ({
       start,
       pause,
       togglePlayPause,
+      waitWhilePaused,
+      getPausedSince,
 
       // Completion signals
       signalAudioComplete,
@@ -212,6 +274,8 @@ const TutorialProvider = ({
       start,
       pause,
       togglePlayPause,
+      waitWhilePaused,
+      getPausedSince,
       signalAudioComplete,
       signalEventComplete,
       signalAnimationComplete,
