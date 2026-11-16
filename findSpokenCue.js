@@ -21,11 +21,11 @@ const WORD = /[\p{L}\p{N}]+/gu
 
 // Case, accents and soft hyphens never decide a match: "Teléfonos" is
 // "telefonos", and a label hyphenated by hand for a language the browser
-// cannot hyphenate ("Rentgen­uzņēmumi") is the word the voice says
+// cannot hyphenate ("Rentgen\u00ADuzņēmumi") is the word the voice says
 const fold = text =>
   text
     .normalize('NFD')
-    .replace(/[\p{M}­]/gu, '')
+    .replace(/[\p{M}\u00AD]/gu, '')
     .toLowerCase()
 
 const wordsOf = text =>
