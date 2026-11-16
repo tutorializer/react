@@ -19,8 +19,14 @@
 const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u
 const WORD = /[\p{L}\p{N}]+/gu
 
-// Case and accents never decide a match: "Teléfonos" is "telefonos"
-const fold = text => text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+// Case, accents and soft hyphens never decide a match: "Teléfonos" is
+// "telefonos", and a label hyphenated by hand for a language the browser
+// cannot hyphenate ("Rentgen­uzņēmumi") is the word the voice says
+const fold = text =>
+  text
+    .normalize('NFD')
+    .replace(/[\p{M}­]/gu, '')
+    .toLowerCase()
 
 const wordsOf = text =>
   Array.from(text.matchAll(WORD), ({ 0: word, index }) => ({ word, index }))
